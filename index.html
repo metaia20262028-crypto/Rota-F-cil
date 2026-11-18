@@ -92,8 +92,11 @@ body.navon #mapSearch{display:none}
 body.navon #fabs{top:calc(env(safe-area-inset-top,0px) + 122px)}
 .maplibregl-ctrl-top-right{top:calc(env(safe-area-inset-top,0px) + 2px)}
 body.navon .maplibregl-ctrl-top-right{top:calc(env(safe-area-inset-top,0px) + 80px)}
-#nextCard{position:absolute;z-index:5;left:10px;right:10px;bottom:10px;background:var(--card);border-radius:22px;padding:8px 14px 14px;box-shadow:0 -4px 20px rgba(0,0,0,.25);border:1px solid var(--line)}
-.grab{width:42px;height:4px;border-radius:9px;background:var(--line);margin:2px auto 8px}
+#nextCard{position:absolute;z-index:5;left:10px;right:10px;bottom:10px;background:var(--card);border-radius:22px;padding:8px 14px 14px;box-shadow:0 -4px 20px rgba(0,0,0,.25);border:1px solid var(--line);transition:padding .2s ease}
+.grab{width:42px;height:4px;border-radius:9px;background:var(--line);margin:2px auto 8px;cursor:pointer;touch-action:manipulation}
+#nextCard.collapsed{padding:8px 14px}
+#nextCard.collapsed>:not(.grab){display:none}
+#nextCard.collapsed .grab{margin:2px auto}
 .naddr{font-weight:800;font-size:1.15rem;text-align:center;margin:2px 0 4px;overflow-wrap:anywhere}
 .acts2{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px}
 #tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -540,7 +543,7 @@ body.navon .maplibregl-ctrl-top-right{top:calc(env(safe-area-inset-top,0px) + 80
   }
 
   /* ---------- telas ---------- */
-  var openId=null;
+  var openId=null,nextCardCollapsed=false;
   function renderProgress(){
     var n=state.stops.length,d=state.stops.filter(function(s){return s.done}).length,p=n?Math.round(d*100/n):0;
     $("pct").textContent=p+"% concluído";$("bar").style.width=p+"%";
@@ -587,8 +590,9 @@ body.navon .maplibregl-ctrl-top-right{top:calc(env(safe-area-inset-top,0px) + 80
     var t=pending()[0],c=$("nextCard");
     if(!state.stops.length){c.hidden=true;return;}
     c.hidden=false;
-    if(!t){c.innerHTML='<div class="grab"></div><div class="naddr">Todas as entregas feitas 🎉</div>';return;}
-    c.innerHTML='<div class="grab"></div><div class="tag ctr">Próxima entrega ('+(state.stops.indexOf(t)+1)+' de '+state.stops.length+', faltam '+pending().length+')</div><div class="naddr">'+esc(t.label)+'</div>'+
+    c.classList.toggle("collapsed",nextCardCollapsed);
+    if(!t){c.innerHTML='<div class="grab" role="button" tabindex="0" aria-label="Recolher ou abrir painel da entrega" title="Recolher ou abrir painel"></div><div class="naddr">Todas as entregas feitas 🎉</div>';return;}
+    c.innerHTML='<div class="grab" role="button" tabindex="0" aria-label="Recolher ou abrir painel da entrega" title="Recolher ou abrir painel"></div><div class="tag ctr">Próxima entrega ('+(state.stops.indexOf(t)+1)+' de '+state.stops.length+', faltam '+pending().length+')</div><div class="naddr">'+esc(t.label)+'</div>'+
       (t.note||t.qty>1?'<div class="tag ctr">'+esc((t.note||"")+(t.qty>1?" / "+t.qty+" pacotes":""))+'</div>':'')+
       '<button class="cta" data-c="done">Confirmar entrega</button><div class="acts2"><button class="small alt" data-c="nav">'+(nav.on?"Parar":"Iniciar")+'</button><button class="small alt" data-c="fail">Não entregue</button>'+
       '<a class="btn small alt" target="_blank" rel="noopener" href="'+gm(null,t,[])+'">Google Maps</a><a class="btn small alt" target="_blank" rel="noopener" href="https://waze.com/ul?ll='+t.lat+','+t.lng+'&navigate=yes">Waze</a></div>';
@@ -726,12 +730,15 @@ body.navon .maplibregl-ctrl-top-right{top:calc(env(safe-area-inset-top,0px) + 80
   $("fFollow").onclick=function(){setFollow(!nav.follow);};
   $("fVoice").onclick=function(){nav.voice=!nav.voice;this.textContent="Voz: "+(nav.voice?"ligada":"desligada");if(!nav.voice){try{speechSynthesis.cancel();}catch(e){}}};
   $("fSat").onclick=function(){satOn=!satOn;if(mapReady&&map.getLayer("sat"))map.setLayoutProperty("sat","visibility",satOn?"visible":"none");this.textContent=satOn?"Mapa":"Satélite";};
+  function toggleNextCard(){nextCardCollapsed=!nextCardCollapsed;$("nextCard").classList.toggle("collapsed",nextCardCollapsed);}
   $("nextCard").addEventListener("click",function(e){
+    if(e.target.closest(".grab")){toggleNextCard();return;}
     var b=e.target.closest("button[data-c]");if(!b)return;var t=pending()[0];if(!t)return;
     if(b.dataset.c==="nav")nav.on?stopNav():startNav();
     else if(b.dataset.c==="done"){t.done=true;render(false);}
     else if(b.dataset.c==="fail"){var r=prompt("Motivo (ex.: ausente, endereço errado):","ausente");if(r!==null){t.done=true;t.fail=r.trim()||"não entregue";render(false);}}
   });
+  $("nextCard").addEventListener("keydown",function(e){if(e.target.closest(".grab")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();toggleNextCard();}});
   $("list").addEventListener("click",function(e){
     var bt=e.target.closest("button[data-a]");
     if(!bt){if(e.target.closest("a"))return;var c=e.target.closest("li.stop");if(c){openId=openId===c.dataset.id?null:c.dataset.id;renderList();}return;}
